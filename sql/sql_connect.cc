@@ -1489,6 +1489,10 @@ THD *CONNECT::create_thd(THD *thd)
 
   DBUG_EXECUTE_IF("simulate_failed_connection_2", DBUG_RETURN(0); );
 
+#ifdef FD_CLOEXEC
+  (void) fcntl(mysql_socket_getfd(vio->mysql_socket), F_SETFD, FD_CLOEXEC);
+#endif
+
   if (thd)
   {
     /* reuse old thd */
