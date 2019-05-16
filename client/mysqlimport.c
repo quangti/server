@@ -502,8 +502,8 @@ static void safe_exit(int error, MYSQL *mysql)
   if (mysql)
     mysql_close(mysql);
 
-  free_defaults(argv_to_free);
   mysql_library_end();
+  free_defaults(argv_to_free);
   my_free(opt_password);
   if (error)
     sf_leaking_memory= 1; /* dirty exit, some threads are still running */

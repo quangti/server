@@ -637,7 +637,7 @@ bad:
 
 		ulint decomp = fil_page_decompress(buf, page, space->flags);
 		if (!decomp || (zip_size && decomp != srv_page_size)) {
-			goto bad_doublewrite;
+			continue;
 		}
 
 		if (expect_encrypted
@@ -650,11 +650,6 @@ bad:
 		}
 
 		if (is_corrupted) {
-			if (!is_all_zero) {
-bad_doublewrite:
-				ib::warn() << "A doublewrite copy of page "
-					<< page_id << " is corrupted.";
-			}
 			/* Theoretically we could have another good
 			copy for this page in the doublewrite
 			buffer. If not, we will report a fatal error

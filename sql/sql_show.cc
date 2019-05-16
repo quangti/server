@@ -5670,7 +5670,7 @@ static int get_schema_tables_record(THD *thd, TABLE_LIST *tables,
       }
       if (file->ha_table_flags() & (HA_HAS_OLD_CHECKSUM | HA_HAS_NEW_CHECKSUM))
       {
-        table->field[18]->store((longlong) file->checksum(), TRUE);
+        table->field[18]->store((longlong) file->stats.checksum, TRUE);
         table->field[18]->set_notnull();
       }
     }
@@ -8553,7 +8553,6 @@ int mysql_schema_table(THD *thd, LEX *lex, TABLE_LIST *table_list)
     table->alias_name_used= my_strcasecmp(table_alias_charset,
                                           table_list->schema_table_name.str,
                                           table_list->alias.str);
-  table_list->table_name= table->s->table_name;
   table_list->table= table;
   table->next= thd->derived_tables;
   thd->derived_tables= table;
