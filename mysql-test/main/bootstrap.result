@@ -19,6 +19,8 @@ SELECT 'bug' as '' FROM INFORMATION_SCHEMA.ENGINES WHERE engine='innodb'
 
 # Kill the server
 # restart
+# Kill the server
+# restart
 End of 5.5 tests
 # Kill the server
 # restart
