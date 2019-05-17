@@ -9986,31 +9986,35 @@ static bool create_ref_for_key(JOIN *join, JOIN_TAB *j,
         j->ref.null_rejecting|= (key_part_map)1 << i;
       keyuse_uses_no_tables= keyuse_uses_no_tables && !keyuse->used_tables;
       /*
-        Todo: we should remove this check for thd->lex->describe on the next
-        line. With SHOW EXPLAIN code, EXPLAIN printout code no longer depends
-        on it. However, removing the check caused change in lots of query
-        plans! Does the optimizer depend on the contents of
-        table_ref->key_copy ? If yes, do we produce incorrect EXPLAINs? 
+        We don't want to compute heavy expressions in EXPLAIN, an example would
+        select * from t1 where t1.key=(select thats very heavy);
+
+        (select thats very heavy) => is a constant here
+        eg: (select avg(order_cost) from orders) => constant but expensive
       */
       if (!keyuse->val->used_tables() && !thd->lex->describe)
       {					// Compare against constant
-	store_key_item tmp(thd, 
+        store_key_item tmp(thd,
                            keyinfo->key_part[i].field,
                            key_buff + maybe_null,
                            maybe_null ?  key_buff : 0,
                            keyinfo->key_part[i].length,
                            keyuse->val,
                            FALSE);
-	if (unlikely(thd->is_fatal_error))
-	  DBUG_RETURN(TRUE);
-	tmp.copy();
+        if (unlikely(thd->is_fatal_error))
+          DBUG_RETURN(TRUE);
+        tmp.copy();
         j->ref.const_ref_part_map |= key_part_map(1) << i ;
       }
       else
-	*ref_key++= get_store_key(thd,
-				  keyuse,join->const_table_map,
-				  &keyinfo->key_part[i],
-				  key_buff, maybe_null);
+      {
+        *ref_key++= get_store_key(thd,
+                                  keyuse,join->const_table_map,
+                                  &keyinfo->key_part[i],
+                                  key_buff, maybe_null);
+        if (!keyuse->val->used_tables())
+          j->ref.const_ref_part_map |= key_part_map(1) << i ;
+      }
       /*
 	Remember if we are going to use REF_OR_NULL
 	But only if field _really_ can be null i.e. we force JT_REF
@@ -25256,6 +25260,8 @@ bool JOIN_TAB::save_explain_data(Explain_table_access *eta,
         {
           if (!(eta->ref_list.append_str(thd->mem_root, "const")))
             return 1;
+          if (thd->lex->describe)
+            key_ref++;
         }
         else
         {
@@ -26921,7 +26927,15 @@ test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER *order, TABLE *table,
   */
   if (ref_key >= 0 && ref_key != MAX_KEY && tab->type == JT_REF)
   {
-    if (table->quick_keys.is_set(ref_key))
+    /*
+      For all the parts of the ref key we check if all of them belong
+      to the type ref(const). This is done because if all parts of the ref
+      key are of type  ref(const), then we are sure that the estimates
+      provides by quick keys is better than that provide by rec_per_key.
+    */
+    if (tab->ref.const_ref_part_map == make_prev_keypart_map(tab->ref.key_parts) &&
+        table->quick_keys.is_set(ref_key) &&
+             table->quick_key_parts[ref_key] == tab->ref.key_parts)
       refkey_rows_estimate= table->quick_rows[ref_key];
     else
     {
