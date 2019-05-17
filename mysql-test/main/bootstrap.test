@@ -76,7 +76,9 @@ SELECT 'bug' as '' FROM INFORMATION_SCHEMA.ENGINES WHERE engine='innodb'
 --write_file $MYSQLTEST_VARDIR/tmp/1
 use test;
 EOF
+--source include/kill_mysqld.inc
 --exec $MYSQLD_BOOTSTRAP_CMD < $MYSQLTEST_VARDIR/tmp/1 >> $MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1
+--source include/start_mysqld.inc
 --remove_file $MYSQLTEST_VARDIR/tmp/1
 
 --echo End of 5.5 tests
