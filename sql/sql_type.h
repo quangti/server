@@ -3705,10 +3705,6 @@ public:
 
   virtual bool
   Vers_history_point_resolve_unit(THD *thd, Vers_history_point *point) const;
-
-  static bool Charsets_are_compatible(const CHARSET_INFO *old_ci,
-                                      const CHARSET_INFO *new_ci,
-                                      bool part_of_a_key);
 };
 
 
@@ -5203,6 +5199,7 @@ public:
   int Item_save_in_field(Item *item, Field *field, bool no_conversions) const;
   String *print_item_value(THD *thd, Item *item, String *str) const;
   Item_cache *Item_get_cache(THD *thd, const Item *item) const;
+  longlong Item_val_int_unsigned_typecast(Item *item) const;
   bool Item_hybrid_func_fix_attributes(THD *thd,
                                        const char *name,
                                        Type_handler_hybrid_field_type *,

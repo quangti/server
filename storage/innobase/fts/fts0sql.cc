@@ -91,14 +91,14 @@ fts_get_table_id(
 
 /** Construct the name of an internal FTS table for the given table.
 @param[in]	fts_table	metadata on fulltext-indexed table
-@param[in]	dict_locked	whether dict_sys->mutex is being held
+@param[in]	dict_locked	whether dict_sys.mutex is being held
 @return	the prefix, must be freed with ut_free() */
 char* fts_get_table_name_prefix(const fts_table_t* fts_table)
 {
 	char		table_id[FTS_AUX_MIN_TABLE_ID_LENGTH];
 	const size_t table_id_len = size_t(fts_get_table_id(fts_table,
 							    table_id)) + 1;
-	mutex_enter(&dict_sys->mutex);
+	mutex_enter(&dict_sys.mutex);
 	/* Include the separator as well. */
 	const size_t dbname_len = fts_table->table->name.dblen() + 1;
 	ut_ad(dbname_len > 1);
@@ -106,7 +106,7 @@ char* fts_get_table_name_prefix(const fts_table_t* fts_table)
 	char* prefix_name = static_cast<char*>(
 		ut_malloc_nokey(prefix_name_len));
 	memcpy(prefix_name, fts_table->table->name.m_name, dbname_len);
-	mutex_exit(&dict_sys->mutex);
+	mutex_exit(&dict_sys.mutex);
 	memcpy(prefix_name + dbname_len, "FTS_", 4);
 	memcpy(prefix_name + dbname_len + 4, table_id, table_id_len);
 	return prefix_name;
@@ -115,20 +115,20 @@ char* fts_get_table_name_prefix(const fts_table_t* fts_table)
 /** Construct the name of an internal FTS table for the given table.
 @param[in]	fts_table	metadata on fulltext-indexed table
 @param[out]	table_name	a name up to MAX_FULL_NAME_LEN
-@param[in]	dict_locked	whether dict_sys->mutex is being held */
+@param[in]	dict_locked	whether dict_sys.mutex is being held */
 void fts_get_table_name(const fts_table_t* fts_table, char* table_name,
 			bool dict_locked)
 {
 	if (!dict_locked) {
-		mutex_enter(&dict_sys->mutex);
+		mutex_enter(&dict_sys.mutex);
 	}
-	ut_ad(mutex_own(&dict_sys->mutex));
+	ut_ad(mutex_own(&dict_sys.mutex));
 	/* Include the separator as well. */
 	const size_t dbname_len = fts_table->table->name.dblen() + 1;
 	ut_ad(dbname_len > 1);
 	memcpy(table_name, fts_table->table->name.m_name, dbname_len);
 	if (!dict_locked) {
-		mutex_exit(&dict_sys->mutex);
+		mutex_exit(&dict_sys.mutex);
 	}
 	memcpy(table_name += dbname_len, "FTS_", 4);
 	table_name += 4;
@@ -158,17 +158,17 @@ fts_parse_sql(
 			   & TABLE_DICT_LOCKED));
 
 	if (!dict_locked) {
-		ut_ad(!mutex_own(&dict_sys->mutex));
+		ut_ad(!mutex_own(&dict_sys.mutex));
 
 		/* The InnoDB SQL parser is not re-entrant. */
-		mutex_enter(&dict_sys->mutex);
+		mutex_enter(&dict_sys.mutex);
 	}
 
 	graph = pars_sql(info, str);
 	ut_a(graph);
 
 	if (!dict_locked) {
-		mutex_exit(&dict_sys->mutex);
+		mutex_exit(&dict_sys.mutex);
 	}
 
 	ut_free(str);
@@ -188,7 +188,7 @@ fts_parse_sql_no_dict_lock(
 	char*		str;
 	que_t*		graph;
 
-	ut_ad(mutex_own(&dict_sys->mutex));
+	ut_ad(mutex_own(&dict_sys.mutex));
 
 	str = ut_str3cat(fts_sql_begin, sql, fts_sql_end);
 

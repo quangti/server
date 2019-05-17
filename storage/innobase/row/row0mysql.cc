@@ -2121,7 +2121,7 @@ row_mysql_freeze_data_dictionary_func(
 {
 	ut_a(trx->dict_operation_lock_mode == 0);
 
-	rw_lock_s_lock_inline(dict_operation_lock, 0, file, line);
+	rw_lock_s_lock_inline(&dict_sys.latch, 0, file, line);
 
 	trx->dict_operation_lock_mode = RW_S_LATCH;
 }
@@ -2137,7 +2137,7 @@ row_mysql_unfreeze_data_dictionary(
 
 	ut_a(trx->dict_operation_lock_mode == RW_S_LATCH);
 
-	rw_lock_s_unlock(dict_operation_lock);
+	rw_lock_s_unlock(&dict_sys.latch);
 
 	trx->dict_operation_lock_mode = 0;
 }
@@ -2321,14 +2321,8 @@ row_mysql_lock_data_dictionary_func(
 {
 	ut_a(trx->dict_operation_lock_mode == 0
 	     || trx->dict_operation_lock_mode == RW_X_LATCH);
-
-	/* Serialize data dictionary operations with dictionary mutex:
-	no deadlocks or lock waits can occur then in these operations */
-
-	rw_lock_x_lock_inline(dict_operation_lock, 0, file, line);
+	dict_sys.lock(file, line);
 	trx->dict_operation_lock_mode = RW_X_LATCH;
-
-	mutex_enter(&dict_sys->mutex);
 }
 
 /*********************************************************************//**
@@ -2339,16 +2333,9 @@ row_mysql_unlock_data_dictionary(
 	trx_t*	trx)	/*!< in/out: transaction */
 {
 	ut_ad(lock_trx_has_sys_table_locks(trx) == NULL);
-
 	ut_a(trx->dict_operation_lock_mode == RW_X_LATCH);
-
-	/* Serialize data dictionary operations with dictionary mutex:
-	no deadlocks can occur then in these operations */
-
-	mutex_exit(&dict_sys->mutex);
-	rw_lock_x_unlock(dict_operation_lock);
-
 	trx->dict_operation_lock_mode = 0;
+	dict_sys.unlock();
 }
 
 /*********************************************************************//**
@@ -2370,8 +2357,7 @@ row_create_table_for_mysql(
 	que_thr_t*	thr;
 	dberr_t		err;
 
-	ut_ad(rw_lock_own(dict_operation_lock, RW_LOCK_X));
-	ut_ad(mutex_own(&dict_sys->mutex));
+	ut_d(dict_sys.assert_locked());
 	ut_ad(trx->dict_operation_lock_mode == RW_X_LATCH);
 
 	DBUG_EXECUTE_IF(
@@ -2511,8 +2497,7 @@ row_create_index_for_mysql(
 	ulint		len;
 	dict_table_t*	table = index->table;
 
-	ut_ad(rw_lock_own(dict_operation_lock, RW_LOCK_X));
-	ut_ad(mutex_own(&dict_sys->mutex));
+	ut_d(dict_sys.assert_locked());
 
 	for (i = 0; i < index->n_def; i++) {
 		/* Check that prefix_len and actual length
@@ -2738,7 +2723,7 @@ row_mysql_drop_garbage_tables()
 
 	mtr.start();
 	btr_pcur_open_at_index_side(
-		true, dict_table_get_first_index(dict_sys->sys_tables),
+		true, dict_table_get_first_index(dict_sys.sys_tables),
 		BTR_SEARCH_LEAF, &pcur, true, 0, &mtr);
 
 	for (;;) {
@@ -3281,7 +3266,7 @@ row_drop_table_from_cache(
 	is going to be destroyed below. */
 	trx->mod_tables.erase(table);
 
-	dict_table_remove_from_cache(table);
+	dict_sys.remove(table);
 
 	if (dict_load_table(tablename, true, DICT_ERR_IGNORE_NONE)) {
 		ib::error() << "Not able to remove table "
@@ -3303,7 +3288,7 @@ will remain locked.
 @param[in]	create_failed	true=create table failed
 				because e.g. foreign key column
 @param[in]	nonatomic	Whether it is permitted to release
-				and reacquire dict_operation_lock
+				and reacquire dict_sys.latch
 @return error code or DB_SUCCESS */
 dberr_t
 row_drop_table_for_mysql(
@@ -3342,8 +3327,7 @@ row_drop_table_for_mysql(
 		nonatomic = true;
 	}
 
-	ut_ad(mutex_own(&dict_sys->mutex));
-	ut_ad(rw_lock_own(dict_operation_lock, RW_LOCK_X));
+	ut_d(dict_sys.assert_locked());
 
 	table = dict_table_open_on_name(
 		name, TRUE, FALSE,
@@ -3374,7 +3358,7 @@ row_drop_table_for_mysql(
 		is going to be destroyed below. */
 		trx->mod_tables.erase(table);
 		table->release();
-		dict_table_remove_from_cache(table);
+		dict_sys.remove(table);
 		err = DB_SUCCESS;
 		goto funct_exit_all_freed;
 	}
@@ -4017,8 +4001,8 @@ loop:
 
 		/* The dict_table_t object must not be accessed before
 		dict_table_open() or after dict_table_close(). But this is OK
-		if we are holding, the dict_sys->mutex. */
-		ut_ad(mutex_own(&dict_sys->mutex));
+		if we are holding, the dict_sys.mutex. */
+		ut_ad(mutex_own(&dict_sys.mutex));
 
 		/* Disable statistics on the found table. */
 		if (!dict_stats_stop_bg(table)) {

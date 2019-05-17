@@ -4490,7 +4490,7 @@ void Type_handler_temporal_result::Item_get_date(THD *thd, Item *item,
 longlong Type_handler_real_result::
            Item_val_int_signed_typecast(Item *item) const
 {
-  return item->val_int_signed_typecast_from_int();
+  return item->val_int_signed_typecast_from_real();
 }
 
 longlong Type_handler_int_result::
@@ -4502,7 +4502,7 @@ longlong Type_handler_int_result::
 longlong Type_handler_decimal_result::
            Item_val_int_signed_typecast(Item *item) const
 {
-  return item->val_int();
+  return VDec(item).to_longlong(false);
 }
 
 longlong Type_handler_temporal_result::
@@ -4522,7 +4522,7 @@ longlong Type_handler_string_result::
 longlong Type_handler_real_result::
            Item_val_int_unsigned_typecast(Item *item) const
 {
-  return item->val_int_unsigned_typecast_from_int();
+  return item->val_int_unsigned_typecast_from_real();
 }
 
 longlong Type_handler_int_result::
@@ -4535,6 +4535,32 @@ longlong Type_handler_temporal_result::
            Item_val_int_unsigned_typecast(Item *item) const
 {
   return item->val_int_unsigned_typecast_from_int();
+}
+
+longlong Type_handler_time_common::
+           Item_val_int_unsigned_typecast(Item *item) const
+{
+  /*
+    TODO: this should eventually be fixed to do rounding
+    when TIME_ROUND_FRACTIONAL is enabled, together with
+    Field_{tiny|short|long|longlong}::store_time_dec().
+    See MDEV-19502.
+  */
+  THD *thd= current_thd;
+  Time tm(thd, item);
+  DBUG_ASSERT(!tm.is_valid_time() == item->null_value);
+  if (!tm.is_valid_time())
+    return 0;
+  longlong res= tm.to_longlong();
+  if (res < 0)
+  {
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE,
+                        ER_DATA_OVERFLOW, ER_THD(thd, ER_DATA_OVERFLOW),
+                        ErrConvTime(tm.get_mysql_time()).ptr(),
+                        "UNSIGNED BIGINT");
+    return 0;
+  }
+  return res;
 }
 
 longlong Type_handler_string_result::
@@ -8219,48 +8245,51 @@ Type_handler_timestamp_common::Item_param_val_native(THD *thd,
     TIME_to_native(thd, &ltime, to, item->datetime_precision(thd));
 }
 
-static bool charsets_are_compatible(const char *old_cs_name,
-                                    const CHARSET_INFO *new_ci)
+
+LEX_CSTRING Charset::collation_specific_name() const
 {
-  const char *new_cs_name= new_ci->csname;
+  /*
+    User defined collations can provide arbitrary names
+    for character sets and collations, so a collation
+    name not necessarily starts with the character set name.
+  */
+  size_t csname_length= strlen(m_charset->csname);
+  if (strncmp(m_charset->name, m_charset->csname, csname_length))
+    return {NULL, 0};
+  const char *ptr= m_charset->name + csname_length;
+  return {ptr, strlen(ptr) };
+}
 
-  if (!strcmp(old_cs_name, new_cs_name))
+
+bool
+Charset::encoding_allows_reinterpret_as(const CHARSET_INFO *cs) const
+{
+  if (!strcmp(m_charset->csname, cs->csname))
     return true;
 
-  if (!strcmp(old_cs_name, MY_UTF8MB3) && !strcmp(new_cs_name, MY_UTF8MB4))
+  if (!strcmp(m_charset->csname, MY_UTF8MB3) &&
+      !strcmp(cs->csname, MY_UTF8MB4))
     return true;
 
-  if (!strcmp(old_cs_name, "ascii") && !(new_ci->state & MY_CS_NONASCII))
-    return true;
-
-  if (!strcmp(old_cs_name, "ucs2") && !strcmp(new_cs_name, "utf16"))
-    return true;
-
+  /*
+    Originally we allowed here instat ALTER for ASCII-to-LATIN1
+    and UCS2-to-UTF16, but this was wrong:
+    - MariaDB's ascii is not a subset for 8-bit character sets
+      like latin1, because it allows storing bytes 0x80..0xFF as
+      "unassigned" characters (see MDEV-19285).
+    - MariaDB's ucs2 (as in Unicode-1.1) is not a subset for UTF16,
+      because they treat surrogate codes differently (MDEV-19284).
+  */
   return false;
 }
 
-bool Type_handler::Charsets_are_compatible(const CHARSET_INFO *old_ci,
-                                           const CHARSET_INFO *new_ci,
-                                           bool part_of_a_key)
+
+bool
+Charset::encoding_and_order_allow_reinterpret_as(CHARSET_INFO *cs) const
 {
-  const char *old_cs_name= old_ci->csname;
-  const char *new_cs_name= new_ci->csname;
-
-  if (!charsets_are_compatible(old_cs_name, new_ci))
-  {
+  if (!encoding_allows_reinterpret_as(cs))
     return false;
-  }
-
-  if (!part_of_a_key)
-  {
-    return true;
-  }
-
-  if (strcmp(old_ci->name + strlen(old_cs_name),
-             new_ci->name + strlen(new_cs_name)))
-  {
-    return false;
-  }
-
-  return true;
+  LEX_CSTRING name0= collation_specific_name();
+  LEX_CSTRING name1= Charset(cs).collation_specific_name();
+  return name0.length && !cmp(&name0, &name1);
 }
