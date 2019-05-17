@@ -51,9 +51,10 @@ typedef struct keyuse_t {
   uint	key, keypart, optimize;
   key_part_map keypart_map;
   ha_rows      ref_table_rows;
+
   /**
-    If true, the comparison this value was created from will not be
-    satisfied if val has NULL 'value'.
+    If true, the condition this struct represents (lets say field= val)
+    will not be satisfied if field is NULL or val is NULL
   */
   bool null_rejecting;
   /*

@@ -4953,7 +4953,9 @@ make_join_statistics(JOIN *join, List<TABLE_LIST> &tables_list,
     add_group_and_distinct_keys(join, s);
 
     s->table->cond_selectivity= 1.0;
-    
+
+    make_null_rejecting_conds(join->thd, s);
+
     /*
       Perform range analysis if there are keys it could use (1). 
       Don't do range analysis for materialized subqueries (2).
@@ -5510,15 +5512,30 @@ add_key_field(JOIN *join,
     If the condition has form "tbl.keypart = othertbl.field" and 
     othertbl.field can be NULL, there will be no matches if othertbl.field 
     has NULL value.
-    We use null_rejecting in add_not_null_conds() to add
-    'othertbl.field IS NOT NULL' to tab->select_cond.
+
+    The field KEY_FIELD::null_rejecting is set to TRUE if either
+    the left or the right hand side of the equality is NULLABLE
+
+    null_rejecting is used
+      - by add_not_null_conds(), to add "othertbl.field IS NOT NULL" to
+        othertbl's tab->select_cond. (This is called "Early NULLs filtering")
+
+      - by make_null_rejecting_conds(), to provide range optimizer with
+        additional "tbl.keypart IS NOT NULL" condition.
   */
   {
     Item *real= (*value)->real_item();
-    if (((cond->functype() == Item_func::EQ_FUNC) ||
-         (cond->functype() == Item_func::MULT_EQUAL_FUNC)) &&
-        (real->type() == Item::FIELD_ITEM) &&
-        ((Item_field*)real)->field->maybe_null())
+    if ((
+         (cond->functype() == Item_func::EQ_FUNC) ||
+         (cond->functype() == Item_func::MULT_EQUAL_FUNC)
+        ) &&
+        (
+          (
+            (real->type() == Item::FIELD_ITEM) &&
+            ((Item_field*)real)->field->maybe_null()
+          ) ||
+          (field->maybe_null())
+        ))
       (*key_fields)->null_rejecting= true;
     else
       (*key_fields)->null_rejecting= false;
@@ -9982,8 +9999,12 @@ static bool create_ref_for_key(JOIN *join, JOIN_TAB *j,
       uint maybe_null= MY_TEST(keyinfo->key_part[i].null_bit);
       j->ref.items[i]=keyuse->val;		// Save for cond removal
       j->ref.cond_guards[i]= keyuse->cond_guard;
-      if (keyuse->null_rejecting) 
+      Item *real= (keyuse->val)->real_item();
+      if (keyuse->null_rejecting &&
+          (real->type() == Item::FIELD_ITEM) &&
+          ((Item_field*)real)->field->maybe_null())
         j->ref.null_rejecting|= (key_part_map)1 << i;
+
       keyuse_uses_no_tables= keyuse_uses_no_tables && !keyuse->used_tables;
       /*
         We don't want to compute heavy expressions in EXPLAIN, an example would

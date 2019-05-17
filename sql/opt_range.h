@@ -35,9 +35,11 @@
 */
 #include "sql_class.h"                          // set_var.h: THD
 #include "set_var.h"                            /* Item */
+#include "sql_test.h"
 
 class JOIN;
 class Item_sum;
+typedef struct st_join_table JOIN_TAB;
 
 struct KEY_PART {
   uint16           key,part;
@@ -1731,6 +1733,7 @@ bool eq_ranges_exceeds_limit(RANGE_SEQ_IF *seq, void *seq_init_param,
 bool prune_partitions(THD *thd, TABLE *table, Item *pprune_cond);
 #endif
 void store_key_image_to_rec(Field *field, uchar *ptr, uint len);
+void make_null_rejecting_conds(THD *thd, JOIN_TAB *tab);
 
 extern String null_string;
 
