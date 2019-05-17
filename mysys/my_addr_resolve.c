@@ -225,7 +225,7 @@ int my_addr_resolve(void *ptr, my_addr_loc *loc)
     /* Save result for future comparisons. */
     strnmov(addr2line_binary, info.dli_fname, sizeof(addr2line_binary));
   }
-  offset = info.dli_fbase;
+  offset = 0; /* info.dli_fbase; */
   len= my_snprintf(input, sizeof(input), "%08x\n", (ulonglong)(ptr - offset));
   if (write(in[1], input, len) <= 0)
     return 3;
@@ -278,7 +278,7 @@ int my_addr_resolve(void *ptr, my_addr_loc *loc)
   loc->line= atoi(output + line_number_start);
 
   /* Addr2line was unable to extract any meaningful information. */
-  if (strcmp(loc->file, "??") == 0)
+  if (strcmp(loc->file, "??") == 0 && loc->func[0] == '?')
     return 6;
 
   loc->file= strip_path(loc->file);

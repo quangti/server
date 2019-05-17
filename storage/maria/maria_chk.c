@@ -26,6 +26,8 @@
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
 #endif
+/* #undef HAVE_BACKTRACE */
+#include <my_stacktrace.h>
 
 static uint decode_bits;
 static char **default_argv;
@@ -120,7 +122,19 @@ static void my_exit(int exit_code)
          MY_CHECK_ERROR | MY_GIVE_INFO : MY_CHECK_ERROR);
   exit(exit_code);
 }
-  
+
+#ifdef HAVE_BACKTRACE
+sig_handler handle_fatal_signal(int sig)
+{
+  my_safe_printf_stderr("Got signal %d. Attempting backtrace\n", sig);
+  my_print_stacktrace(0,0,1);
+#ifndef __WIN__
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+#endif
+  return;
+}
+#endif
 
 	/* Main program */
 
@@ -137,6 +151,21 @@ int main(int argc, char **argv)
   maria_quick_table_bits=decode_bits;
   error=0;
   maria_init();
+#ifdef HAVE_BACKTRACE
+  {
+    struct sigaction sa;
+    sa.sa_handler= handle_fatal_signal;
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGABRT, &sa, NULL);
+#ifdef SIGBUS
+    sigaction(SIGBUS, &sa, NULL);
+#endif
+    sigaction(SIGILL, &sa, NULL);
+    sigaction(SIGFPE, &sa, NULL);
+    my_init_stacktrace();
+  }
+#endif
+
   my_error_register(get_handler_error_messages, HA_ERR_FIRST,
                     HA_ERR_FIRST+ array_elements(handler_error_messages)-1);
 
