@@ -4151,8 +4151,6 @@ bool is_eits_usable(Field *field)
   if (!col_stats)
     return false;
 
-  DBUG_ASSERT(field->table->stats_is_read);
-
   /*
     (1): checks if we have EITS statistics for a particular column
     (2): Don't use EITS for GEOMETRY columns

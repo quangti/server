@@ -148,6 +148,7 @@ drop user mysqltest_u1@localhost;
 #
 # MDEV-18241 Downgrade from 10.4 to 10.3 crashes
 #
+source include/switch_to_mysql_user.inc;
 call mtr.add_suppression("Table 'mysql.user' doesn't exist");
 call mtr.add_suppression("'mysql.user' is not of type 'TABLE'");
 rename table mysql.user to mysql.user1;
@@ -160,10 +161,12 @@ create temporary table mysql.user select * from mysql.user1 limit 0;
 flush privileges;
 drop temporary table mysql.user;
 rename table mysql.user1 to mysql.user;
+source include/switch_to_mysql_global_priv.inc;
 
 #
 # Bug#28986737: RENAMING AND REPLACING MYSQL.USER TABLE CAN LEAD TO A SERVER CRASH
 #
+source include/switch_to_mysql_user.inc;
 call mtr.add_suppression('mysql.user table is damaged');
 rename table mysql.user to mysql.user1;
 create table mysql.user (Host char(100), User char(100));
@@ -171,6 +174,7 @@ create table mysql.user (Host char(100), User char(100));
 flush privileges;
 drop table mysql.user;
 rename table mysql.user1 to mysql.user;
+source include/switch_to_mysql_global_priv.inc;
 
 --echo End of 5.5 tests
 

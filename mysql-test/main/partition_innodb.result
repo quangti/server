@@ -417,11 +417,11 @@ t1	InnoDB	10	Dynamic	2	8192	16384	0	0	#	1	#	NULL	NULL	latin1_swedish_ci	NULL	par
 insert into t1 values (NULL), (NULL), (NULL), (NULL);
 show table status;
 Name	Engine	Version	Row_format	Rows	Avg_row_length	Data_length	Max_data_length	Index_length	Data_free	Auto_increment	Create_time	Update_time	Check_time	Collation	Checksum	Create_options	Comment	Max_index_length	Temporary
-t1	InnoDB	10	Dynamic	5	3276	16384	0	0	#	5	#	NULL	NULL	latin1_swedish_ci	NULL	partitioned		0	N
+t1	InnoDB	10	Dynamic	4	4096	16384	0	0	#	5	#	NULL	NULL	latin1_swedish_ci	NULL	partitioned		0	N
 insert into t1 values (NULL), (NULL), (NULL), (NULL);
 show table status;
 Name	Engine	Version	Row_format	Rows	Avg_row_length	Data_length	Max_data_length	Index_length	Data_free	Auto_increment	Create_time	Update_time	Check_time	Collation	Checksum	Create_options	Comment	Max_index_length	Temporary
-t1	InnoDB	10	Dynamic	9	1820	16384	0	0	#	9	#	NULL	NULL	latin1_swedish_ci	NULL	partitioned		0	N
+t1	InnoDB	10	Dynamic	8	2048	16384	0	0	#	9	#	NULL	NULL	latin1_swedish_ci	NULL	partitioned		0	N
 drop table t1;
 create table t1 (a int)
 partition by key (a)

@@ -1842,7 +1842,7 @@ class Grant_tables
       TABLE_LIST *tl= tables + USER_TABLE;
       tl->init_one_table(&MYSQL_SCHEMA_NAME, &MYSQL_TABLE_NAME_USER,
                          NULL, lock_type);
-      tl->updating= lock_type >= TL_WRITE_ALLOW_WRITE;
+      tl->i_s_requested_object= OPEN_TABLE_ONLY;
       p_user_table= &m_user_table_tabular;
       counter++;
       res= really_open(thd, tl, &unused);
